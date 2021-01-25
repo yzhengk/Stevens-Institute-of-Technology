@@ -1,0 +1,592 @@
+---
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+
+
+```{r LoadPackages, include = FALSE}    
+##problem 2-a ----
+chooseCRANmirror(graphics=FALSE, ind=1)
+knitr::opts_chunk$set(echo = TRUE)
+install.packages("readxl", repos = "http://cran.us.r-project.org")
+onecall <- read_excel("1monthcall.xlsx")
+oneput <- read_excel("1monthput.xlsx")
+twocall <- read_excel("2monthscall.xlsx")
+twoput <- read_excel("2monthput.xlsx")
+threecall <- read_excel("3monthcall.xlsx")
+threeput <- read_excel("3monthsput.xlsx")
+
+bscall <- function(sig,S,rf,Tao,K){  #Black-Scholes model
+  
+  d1 <-(log(S/K)+(rf+sig^2/2) *Tao)/(sig*sqrt(Tao))
+  d2 <- d1 - sig * sqrt(Tao)
+  
+  call1<- S*pnorm(d1) - K*exp(-rf*Tao)*pnorm(d2) #call option
+  return(call1)
+}
+
+bsput <- function(sig,S,rf,Tao,K){  #Black-Scholes model
+  
+  d1 <-(log(S/K)+(rf+sig^2/2) *Tao)/(sig*sqrt(Tao))
+  d2 <- d1 - sig * sqrt(Tao)
+  
+  put1<- K*exp(-rf*Tao)*pnorm(-d2)-S*pnorm(-d1) #put option
+  return(put1)
+}
+
+
+bisection <-function(sig.down,sig.up,eps=10^-4){
+  ## repeat until error is sufficiently small
+  if(f(sig.up) * f(sig.down) >0) print("No root")
+  else 
+  {while((f(sig.up)+ f(sig.down))^2 >=eps^2) 
+  {
+    sig <- (sig.down + sig.up) /2
+    if(f(sig.up) * f(sig) < 0)
+      sig.down <- sig
+    else
+      sig.up <- sig
+  }
+    print(sig)
+  }
+}
+
+average1call <- c((onecall$Bid +onecall$Ask)/2)
+average1put <- c((oneput$Bid+oneput$Ask)/2) 
+average2call <- c((twocall$Bid+twocall$Ask)/2)
+average2put <- c((twoput$Bid+twoput$Ask)/2)
+average3call <- c((threecall$Bid + threecall$Ask)/2)
+average3put <- c((threeput$Bid + threeput$Ask)/2)
+
+#implied vol by using black scholes model
+imp_vol <- data.frame()
+
+#one month call ----
+for(i in 1:10) {
+  f <- function(sig) {
+    bscall(sig,136.66,0.75/100,30/252,onecall$Strike[i]) - average1call[i]}
+  imp_vol[i,1] <- bisection(0,1)
+}
+
+#one month put ----
+for(i in 1:10) {
+  f <- function(sig) {
+    bsput(sig,136.66,0.75/100,30/252,oneput$Strike[i]) - average1put[i]}
+  imp_vol[i,2] <- bisection(0,1)
+}
+
+#two months call ----
+for(i in 1: 10) {
+  f <- function(sig) {
+    bscall(sig,136.66,0.75/100,60/252,twocall$Strike[i]) - average2call[i]}
+  imp_vol[i,3] <- bisection(0,1)
+}
+
+#two months put ----
+for(i in 1: 10) {
+  f <- function(sig) {
+    bsput(sig,136.66,0.75/100,60/252,twoput$Strike[i]) - average2put[i]}
+  imp_vol[i,4] <- bisection(0,2)
+}
+
+#Three months call ----
+for(i in 1: 10) {
+  f <- function(sig) {
+    bscall(sig,136.66,0.75/100,90/252,threecall$Strike[i]) - average3call[i]}
+  imp_vol[i,5] <- bisection(0,1)
+}
+#three months put ----
+for(i in 1: 10) {
+  f <- function(sig) {
+    bsput(sig,136.66,0.75/100,90/252,threeput$Strike[i]) - average3put[i]}
+  imp_vol[i,6] <- bisection(0,1)
+}
+colnames(imp_vol) <- c("1M call","1M Put","2M Call","2M Put","3M Call","3M Put")
+imp_vol
+```
+
+
+```{r}
+#problem 2-b ----
+
+findAccuracy <- function(Tm,sig) {
+  for(Nj in 3:10000) {
+    sig = sig
+    Tm = Tm
+    N = ceiling(3*((2*Nj+1)/6)^2)
+    dt = Tm/N
+    dx = sig * sqrt(3*dt)
+    error = dx^2 + dt
+    if(error < 0.001) {
+      break
+    }
+  }
+  return(c(Nj,N,dx))
+}
+
+tableDx <- data.frame()
+for(i in 1:10) {
+  tableDx[i,1] <- findAccuracy(30/252,imp_vol$`1M call`[i])[3]
+  tableDx[i,2] <- findAccuracy(30/252,imp_vol$`1M Put`[i])[3]
+  tableDx[i,3] <- findAccuracy(60/252,imp_vol$`2M Call`[i])[3]
+  tableDx[i,4] <- findAccuracy(60/252,imp_vol$`2M Put`[i])[3]
+  tableDx[i,5] <- findAccuracy(90/252,imp_vol$`3M Call`[i])[3]
+  tableDx[i,6] <- findAccuracy(90/252,imp_vol$`3M Put`[i])[3]
+}
+tableDx
+
+tableN <- data.frame()
+for(i in 1:10) {
+  tableN[i,1] <- findAccuracy(30/252,imp_vol$`1M call`[i])[2]
+  tableN[i,2] <- findAccuracy(30/252,imp_vol$`1M Put`[i])[2]
+  tableN[i,3] <- findAccuracy(60/252,imp_vol$`2M Call`[i])[2]
+  tableN[i,4] <- findAccuracy(60/252,imp_vol$`2M Put`[i])[2]
+  tableN[i,5] <- findAccuracy(90/252,imp_vol$`3M Call`[i])[2]
+  tableN[i,6] <- findAccuracy(90/252,imp_vol$`3M Put`[i])[2]
+}
+tableN
+
+tableNj <- data.frame()
+for(i in 1:10) {
+  tableNj[i,1] <- findAccuracy(30/252,imp_vol$`1M call`[i])[1]
+  tableNj[i,2] <- findAccuracy(30/252,imp_vol$`1M Put`[i])[1]
+  tableNj[i,3] <- findAccuracy(60/252,imp_vol$`2M Call`[i])[1]
+  tableNj[i,4] <- findAccuracy(60/252,imp_vol$`2M Put`[i])[1]
+  tableNj[i,5] <- findAccuracy(90/252,imp_vol$`3M Call`[i])[1]
+  tableNj[i,6] <- findAccuracy(90/252,imp_vol$`3M Put`[i])[1]
+}
+tableNj
+
+EFD <- function(isCall, K, Tm,S0, r, sig, N, div, dx, Nj)
+{
+  # Finite Difference Method: i times, 2*i+1 final nodes
+  # Precompute constants ----
+  dt = Tm/N
+  nu = r - div - 0.5 * sig^2
+  pu = 0.5 * dt * ( (sig/dx)^2 + nu/dx )
+  pm = 1.0 - dt *   (sig/dx)^2 - r*dt 
+  pd = 0.5 * dt * ( (sig/dx)^2 - nu/dx)
+  firstRow = 1
+  nRows = lastRow = 2*Nj+1
+  firstCol = 1
+  middleRow = Nj+1
+  nCols = lastCol = N+1
+  cp = ifelse(isCall, 1, -1)
+  
+  # Intialize asset prices  ----
+  V = S = matrix(0, nrow=nRows, ncol=nCols)
+  S[lastRow, lastCol]=S0*exp(-Nj*dx)
+  
+  for(j in (lastRow-1):firstRow){
+    S[j,lastCol]=S[j+1,lastCol]*exp(dx)
+  }
+  # Intialize option values at maturity ----
+  for (j in 1:lastRow) {
+    V[j, lastCol] = max( 0, cp * (S[j, lastCol]-K))
+  }
+  # Step backwards through the tree ----
+  for (i in N:1) {
+    for(j in (lastRow-1):(firstRow+1)) {
+      V[j, i] = pu*V[j-1,i+1] + pm*V[j, i+1] + pd*V[j+1,i+1]
+    }
+    # Boundary Conditions ----
+    stockTerm = ifelse(isCall, S[1, lastCol]-S[2,lastCol], S[nRows-1,lastCol]-S[nRows,lastCol])
+    V[lastRow,  i] = V[lastRow-1,  i] + ifelse(isCall, 0, stockTerm)
+    V[firstRow, i] = V[firstRow+1, i] + ifelse(isCall, stockTerm, 0)
+  }
+  # Return the price ----
+  return(V[middleRow,firstCol])
+}
+
+solveImplicitTridiagonal <- function(V, pu, pm, pd, lambdaL, lambdaU, colI)
+{
+  
+  # Initalize values ----
+  firstRow = 1
+  secondRow = 2
+  thirdRow = 3
+  lastRow = nRows = nrow(V)
+  lastCol = ncol(V)
+  
+  # Substitute boundary condition at j = -Nj into j = -Nj+1 ----
+  pp = pmp = numeric(nRows)
+  pmp[lastRow-1] = pm + pd
+  pp[lastRow-1]  = V[lastRow-1, lastCol] + pd*lambdaL
+  
+  # Eliminate upper diagonal ----
+  for (j in (lastRow-2):(secondRow)) {
+    pmp[j] = pm - pu*pd/pmp[j+1]
+    pp[j] = V[j, colI+1] - pp[j+1]*pd/pmp[j+1]
+  }
+  
+  # Use boundary conditions at j = Nj and equation at j=Nj-1 ----
+  V[firstRow, colI] = (pp[secondRow] + pmp[secondRow]*lambdaU)/(pu + pmp[secondRow])
+  V[secondRow, colI] = V[firstRow,colI] - lambdaU
+  
+  # Back-substitution ----
+  for(j in thirdRow:lastRow) {
+    V[j, colI] =  (pp[j] -pu*V[j-1, colI])/pmp[j]
+  }
+  V[lastRow, colI] = V[lastRow-1, colI] - lambdaL
+  
+  # Return values ----
+  list(V=V, pmp=pmp, pp=pp)
+}
+
+
+IFD <- function(isCall, K, Tm, S0, r, sig, N, div, dx,Nj)
+{
+  # Implicit Finite Difference Method: i times, 2*i+1 final nodes
+  # Precompute constants ----
+  dt = Tm/N
+  nu = r - div - 0.5 * sig^2
+  edx = exp(dx)
+  pu = -0.5 * dt * ( (sig/dx)^2 + nu/dx )
+  pm =  1.0 + dt *   (sig/dx)^2 + r*dt 
+  pd = -0.5 * dt * ( (sig/dx)^2 - nu/dx)
+  firstRow = 1
+  nRows = lastRow = 2*Nj+1
+  middleRow = Nj+1
+  firstCol = 1
+  nCols = lastCol = N+1
+  
+  cp = ifelse(isCall, 1, -1)
+  
+  # Intialize asset price, derivative price, primed probabilities  ----
+  pp = pmp = V = S = matrix(0, nrow=nRows, ncol=nCols)
+  S[lastRow,lastCol] = S0 * exp(-Nj * dx)
+  
+  for(j in (lastRow-1):firstRow){
+    S[j,lastCol]=S[j+1,lastCol]*exp(dx)
+  }
+  
+  # Intialize option values at maturity ----
+  for (j in firstRow:lastRow) {
+    V[j, lastCol] = max( 0, cp * (S[j, lastCol]-K))
+  }
+  # Compute Derivative Boundary Conditions ----
+  Stockterm1 = ifelse(isCall, (S[firstRow, lastCol] - S[firstRow +1,lastCol]), 0)
+  Stockterm2 = ifelse(isCall, 0,(S[lastRow, lastCol] - S[lastRow -1,lastCol]))
+  lambdaU = Stockterm1
+  lambdaL = Stockterm2
+  
+  # Step backwards through the lattice ----
+  for (i in (lastCol-1):firstCol) {
+    h = solveImplicitTridiagonal(V, pu, pm, pd, lambdaL, lambdaU, i)
+    pmp[,i] = h$pmp  # collect the pm prime probabilities
+    pp [,i] = h$pp   # collect the p prime probabilities
+    V = h$V
+  }
+  # Return the price ----
+  return(V[middleRow,firstCol])
+}
+
+
+
+solveCrankNicholsonTridiagonal=function(V, pu, pm, pd, lambdaL, lambdaU, colI)
+{
+  
+  # Initalize values 
+  firstRow = 1
+  secondRow = 2
+  thirdRow = 3
+  lastRow = nRows = nrow(V)
+  lastCol = ncol(V)
+  # Substitute boundary condition at j = -Nj into j = -Nj+1
+  pp = pmp = numeric(nRows)
+  pmp[lastRow-1] = pm + pd
+  pp[lastRow-1]  = (- pu   *V[lastRow-2, lastCol] 
+                    -(pm-2)*V[lastRow-1, lastCol]
+                    - pd   *V[lastRow  , lastCol] + pd*lambdaL)
+  
+  # Eliminate upper diagonal 
+  for (j in (lastRow-2):(secondRow)) {
+    pmp[j] = pm - pu*pd/pmp[j+1]
+    pp[j] = ( - pu   *V[j-1, colI+1] 
+              -(pm-2) *V[j  , colI+1]
+              - pd    *V[j+1, colI+1] 
+              -pp[j+1]*pd/pmp[j+1])
+  }   
+  
+  # Use boundary conditions at j = Nj and equation at j=Nj-1 
+  V[firstRow, colI] = (pp[secondRow] + pmp[secondRow]*lambdaU)/(pu + pmp[secondRow])
+  V[secondRow, colI] = V[firstRow,colI] - lambdaU
+  
+  # Back-substitution 
+  for(j in thirdRow:lastRow) {
+    V[j, colI] =  (pp[j] -pu*V[j-1, colI])/pmp[j]
+  }
+  V[lastRow, colI] = V[lastRow-1, colI] - lambdaL
+  
+  # Return values 
+  list(V=V, pmp=pmp, pp=pp)
+}
+
+
+CNFD <- function(isCall, K=100, Tm=1, 
+                 S0=100, r=0.06, sig=0.25, N= 1220, div=0.03, dx=0.0124,Nj = 60)
+{
+  # Crank Nicholson Finite Difference Method: i times, 2*i+1 final nodes
+  # Precompute constants 
+  dt = Tm/N
+  nu = r - div - 0.5 * sig^2
+  edx = exp(dx)
+  pu = -0.25     *dt * ( (sig/dx)^2 + nu/dx )  
+  pm =  1.0 + 0.5*dt *   (sig/dx)^2 + 0.5*r*dt 
+  pd = -0.25     *dt * ( (sig/dx)^2 - nu/dx)   
+  firstRow = 1
+  nRows = lastRow = 2*Nj+1
+  firstCol = 1
+  middleRow = Nj+1
+  nCols = lastCol = N+1
+  
+  cp = ifelse(isCall, 1, -1)
+  
+  # Intialize asset price, derivative price, primed probabilities  
+  pp = pmp = V = S = matrix(0, nrow=nRows, ncol=nCols)
+  S[lastRow,lastCol] = S0 * exp(-Nj * dx)
+  
+  for(j in (lastRow-1):firstRow){
+    S[j,lastCol]=S[j+1,lastCol]*exp(dx)
+  }
+  
+  
+  # Intialize option values at maturity
+  for (j in firstRow:lastRow) {
+    V[j, lastCol] = max( 0, cp * (S[j, lastCol]-K))
+  }
+  
+  # Compute Derivative Boundary Conditions
+  Stockterm1 = ifelse(isCall, (S[firstRow, lastCol] - S[firstRow+1,lastCol]), 0)
+  Stockterm2 = ifelse(isCall, 0, (S[lastRow, lastCol] - S[lastRow - 1,lastCol]))
+  lambdaU = Stockterm1
+  lambdaL = Stockterm2
+  
+  # Step backwards through the lattice
+  for (i in (lastCol-1):firstCol) {
+    h = solveCrankNicholsonTridiagonal(V, pu, pm, pd, lambdaL, lambdaU, i)
+    pmp[,i] = round(h$pmp,4)  # collect the pm prime probabilities
+    pp [,i] = round(h$pp, 4)  # collect the p prime probabilities
+    V = h$V
+    
+  }
+  # Return the price
+  return(V[middleRow,firstCol])
+}
+
+EFDP<- data.frame()
+for(i in 1:10) {
+  EFDP[i,1] <- EFD(T,onecall$Strike[i],30/252,136.66,0.75/100,imp_vol$`1M call`[i],
+                                                       tableN$V1[i],0,tableDx$V1[i],tableNj$V1[i])
+  EFDP[i,2] <- EFD(F,oneput$Strike[i],30/252,136.66,0.75/100,imp_vol$`1M Put`[i],
+                                                       tableN$V2[i],0,tableDx$V2[i],tableNj$V2[i])
+  EFDP[i,3] <- EFD(T,twocall$Strike[i],60/252,136.66,0.75/100,imp_vol$`2M Call`[i],
+                                                       tableN$V3[i],0,tableDx$V3[i],tableNj$V3[i])
+  EFDP[i,4] <- EFD(F,twoput$Strike[i],60/252,136.66,0.75/100,imp_vol$`2M Put`[i],
+                                                       tableN$V4[i],0,tableDx$V4[i],tableNj$V4[i])
+  EFDP[i,5] <- EFD(T,threecall$Strike[i],90/252,136.66,0.75/100,imp_vol$`3M Call`[i],
+                                                       tableN$V5[i],0,tableDx$V5[i],tableNj$V5[i])
+  EFDP[i,6] <- EFD(F,threeput$Strike[i],90/252,136.66,0.75/100,imp_vol$`3M Put`[i],
+                                                       tableN$V6[i],0,tableDx$V6[i],tableNj$V6[i])
+}
+
+EFDP
+
+IFDP <- data.frame()
+for(i in 1:10) {
+  IFDP[i,1] <- IFD(T,onecall$Strike[i],30/252,136.66,0.75/100,imp_vol$`1M call`[i],
+                                                       tableN$V1[i],0,tableDx$V1[i],tableNj$V1[i])
+  IFDP[i,2] <- IFD(F,oneput$Strike[i],30/252,136.66,0.75/100,imp_vol$`1M Put`[i],
+                                                       tableN$V2[i],0,tableDx$V2[i],tableNj$V2[i])
+  IFDP[i,3] <- IFD(T,twocall$Strike[i],60/252,136.66,0.75/100,imp_vol$`2M Call`[i],
+                                                       tableN$V3[i],0,tableDx$V3[i],tableNj$V3[i])
+  IFDP[i,4] <- IFD(F,twoput$Strike[i],60/252,136.66,0.75/100,imp_vol$`2M Put`[i],
+                                                       tableN$V4[i],0,tableDx$V4[i],tableNj$V4[i])
+  IFDP[i,5] <- IFD(T,threecall$Strike[i],90/252,136.66,0.75/100,imp_vol$`3M Call`[i],
+                                                       tableN$V5[i],0,tableDx$V5[i],tableNj$V5[i])
+  IFDP[i,6] <- IFD(F,threeput$Strike[i],90/252,136.66,0.75/100,imp_vol$`3M Put`[i],
+                                                       tableN$V6[i],0,tableDx$V6[i],tableNj$V6[i])
+}
+IFDP
+
+CP <- data.frame()
+for(i in 1:10) {
+  CP[i,1] <- CNFD(T,onecall$Strike[i],30/252,136.66,0.75/100,imp_vol$`1M call`[i],
+                                                       tableN$V1[i],0,tableDx$V1[i],tableNj$V1[i])
+  CP[i,2] <- CNFD(F,oneput$Strike[i],30/252,136.66,0.75/100,imp_vol$`1M Put`[i],
+                                                       tableN$V2[i],0,tableDx$V2[i],tableNj$V2[i])
+  CP[i,3] <- CNFD(T,twocall$Strike[i],60/252,136.66,0.75/100,imp_vol$`2M Call`[i],
+                                                       tableN$V3[i],0,tableDx$V3[i],tableNj$V3[i])
+  CP[i,4] <- CNFD(F,twoput$Strike[i],60/252,136.66,0.75/100,imp_vol$`2M Put`[i],
+                                                       tableN$V4[i],0,tableDx$V4[i],tableNj$V4[i])
+  CP[i,5] <- CNFD(T,threecall$Strike[i],90/252,136.66,0.75/100,imp_vol$`3M Call`[i],
+                                                       tableN$V5[i],0,tableDx$V5[i],tableNj$V5[i])
+  CP[i,6] <- CNFD(F,threeput$Strike[i],90/252,136.66,0.75/100,imp_vol$`3M Put`[i],
+                                                       tableN$V6[i],0,tableDx$V6[i],tableNj$V6[i])
+}
+CP
+```
+
+
+
+```{r}
+#problem 2-c ----
+
+findAccuracy <- function(Tm,sig) {
+  for(Nj in 3:1000) {
+    
+    N = ceiling(3*((2*Nj+1)/6)^2)
+    dt = Tm/N
+    dx = sig * sqrt(3*dt)
+    error = dx^2 + dt
+    if(error < 0.001) {
+      break
+    }
+  }
+  list(Nj=Nj,dx=dx,N=N)
+}
+Greeks <- data.frame()
+Greek1 <- data.frame()
+Greek2 <- data.frame()
+Greek3 <- data.frame()
+Ntable <- data.frame()
+Njtable <- data.frame()
+dxtable <- data.frame()
+
+for(i in 1:10) {
+  Ntable[i,1] <- findAccuracy(30/252,imp_vol$`1M call`[i])$N
+  Ntable[i,2] <- findAccuracy(30/252,imp_vol$`1M Put`[i])$N
+  Ntable[i,3] <- findAccuracy(60/252,imp_vol$`2M Call`[i])$N
+  Ntable[i,4] <- findAccuracy(60/252,imp_vol$`2M Put`[i])$N
+  Ntable[i,5] <- findAccuracy(90/252,imp_vol$`3M Call`[i])$N
+  Ntable[i,6] <- findAccuracy(90/252,imp_vol$`3M Put`[i])$N
+}
+Ntable
+
+for(i in 1:10) {
+  Njtable[i,1] <- findAccuracy(30/252,imp_vol$`1M call`[i])$Nj
+  Njtable[i,2] <- findAccuracy(30/252,imp_vol$`1M Put`[i])$Nj
+  Njtable[i,3] <- findAccuracy(60/252,imp_vol$`2M Call`[i])$Nj
+  Njtable[i,4] <- findAccuracy(60/252,imp_vol$`2M Put`[i])$Nj
+  Njtable[i,5] <- findAccuracy(90/252,imp_vol$`3M Call`[i])$Nj
+  Njtable[i,6] <- findAccuracy(90/252,imp_vol$`3M Put`[i])$Nj
+}
+Njtable
+
+for(i in 1:10) {
+  dxtable[i,1] <- findAccuracy(30/252,imp_vol$`1M call`[i])$dx
+  dxtable[i,2] <- findAccuracy(30/252,imp_vol$`1M Put`[i])$dx
+  dxtable[i,3] <- findAccuracy(60/252,imp_vol$`2M Call`[i])$dx
+  dxtable[i,4] <- findAccuracy(60/252,imp_vol$`2M Put`[i])$dx
+  dxtable[i,5] <- findAccuracy(90/252,imp_vol$`3M Call`[i])$dx
+  dxtable[i,6] <- findAccuracy(90/252,imp_vol$`3M Put`[i])$dx
+}
+dxtable
+
+vegaCall <- function(sig,K,Tm) {
+  a <- EFD(T,K,Tm,136.66,0.75/100,sig*(1+0.001),findAccuracy(Tm=Tm,sig*1.001)$N,0,findAccuracy(Tm,sig*(1+0.001))$dx,findAccuracy(Tm,sig*(1+0.001))$Nj)
+  b <- EFD(T,K,Tm,136.66,0.75/100,sig*(1-0.001),findAccuracy(Tm=Tm,sig*(1-0.001))$N,0,findAccuracy(Tm,sig*(1-0.001))$dx,findAccuracy(Tm,sig*(1-0.001))$Nj)
+  return((a-b)/(2*0.001*sig))
+}
+
+vegaPut <- function(sig,K,Tm) {
+  a <- EFD(F,K,Tm,136.66,0.75/100,sig*(1+0.001),findAccuracy(Tm=Tm,sig=sig*(1+0.001))$N,0,findAccuracy(Tm=Tm,sig=sig*(1+0.001))$dx,findAccuracy(Tm=Tm,sig=sig*(1+0.001))$Nj)
+  b <- EFD(F,K,Tm,136.66,0.75/100,sig*(1-0.001),findAccuracy(Tm=Tm,sig=sig*(1-0.001))$N,0,findAccuracy(Tm=Tm,sig=sig*(1-0.001))$dx,findAccuracy(Tm=Tm,sig=sig*(1-0.001))$Nj)
+  return((a-b)/(2*0.001*sig))
+}
+
+```
+
+```{r}
+Greeks <- function(Greeks)
+for(i in 1:10) {
+  Greek1[i,1] <- Greeks(T,onecall$Strike[i],30/252,136.66,0.75/100,imp_vol$`1M call`[i],Ntable$V1[i],Njtable$V1[i],0,dxtable$V1[i])$delta
+  Greek1[i,2] <- Greeks(T,onecall$Strike[i],30/252,136.66,0.75/100,imp_vol$`1M call`[i],Ntable$V1[i],Njtable$V1[i],0,dxtable$V1[i])$gamma
+  Greek1[i,3] <- Greeks(T,onecall$Strike[i],30/252,136.66,0.75/100,imp_vol$`1M call`[i],Ntable$V1[i],Njtable$V1[i],0,dxtable$V1[i])$theta
+  Greek1[i,4] <- vegaCall(imp_vol$`1M call`[i],oneput$Strike[i],30/252)
+  
+  Greek1[i,5] <- Greeks(F,oneput$Strike[i],30/252,136.66,0.75/100,imp_vol$`1M Put`[i],Ntable$V2[i],Njtable$V2[i],0,dxtable$V2[i])$delta
+  Greek1[i,6] <- Greeks(F,oneput$Strike[i],30/252,136.66,0.75/100,imp_vol$`1M Put`[i],Ntable$V2[i],Njtable$V2[i],0,dxtable$V2[i])$gamma
+  Greek1[i,7] <- Greeks(F,oneput$Strike[i],30/252,136.66,0.75/100,imp_vol$`1M Put`[i],Ntable$V2[i],Njtable$V2[i],0,dxtable$V2[i])$theta
+  Greek1[i,8] <- vegaPut(imp_vol$`1M Put`[i],oneput$Strike[i],30/252)
+}
+colnames(Greek1) <- c("Delta Call","Gamma Call","Theta Call","Vega Call","Delta Put","Gamma Put","Theta Put","Vega Put")
+Greek1
+
+
+Greeks <- function(Greeks)
+for(i in 1:10) {
+  Greek2[i,1] <- Greeks(T,twocall$Strike[i],60/252,136.66,0.75/100,imp_vol$`2M Call`[i],Ntable$V3[i],Njtable$V3[i],0,dxtable$V3[i])$delta
+  Greek2[i,2] <- Greeks(T,twocall$Strike[i],60/252,136.66,0.75/100,imp_vol$`2M Call`[i],Ntable$V3[i],Njtable$V3[i],0,dxtable$V3[i])$gamma
+  Greek2[i,3] <- Greeks(T,twocall$Strike[i],60/252,136.66,0.75/100,imp_vol$`2M Call`[i],Ntable$V3[i],Njtable$V3[i],0,dxtable$V3[i])$theta
+  Greek2[i,4] <- vegaCall(imp_vol$`2M Call`[i],twoput$Strike[i],60/252)
+  
+  Greek2[i,5] <- Greeks(F,twoput$Strike[i],60/252,136.66,0.75/100,imp_vol$`2M Put`[i],Ntable$V4[i],Njtable$V4[i],0,dxtable$V4[i])$delta
+  Greek2[i,6] <- Greeks(F,twoput$Strike[i],60/252,136.66,0.75/100,imp_vol$`2M Put`[i],Ntable$V4[i],Njtable$V4[i],0,dxtable$V4[i])$gamma
+  Greek2[i,7] <- Greeks(F,twoput$Strike[i],60/252,136.66,0.75/100,imp_vol$`2M Put`[i],Ntable$V4[i],Njtable$V4[i],0,dxtable$V4[i])$theta
+  Greek2[i,8] <- vegaPut(imp_vol$`2M Put`[i],twoput$Strike[i],60/252)
+}
+colnames(Greek2) <- c("Delta Call","Gamma Call","Theta Call","Vega Call","Delta Put","Gamma Put","Theta Put","Vega Put")
+Greek2
+
+for(i in 1:10) {
+  Greek3[i,1] <- Greeks(T,threecall$Strike[i],90/252,136.66,0.75/100,imp_vol$`3M Call`[i],Ntable$V5[i],Njtable$V5[i],0,dxtable$V5[i])$delta
+  Greek3[i,2] <- Greeks(T,threecall$Strike[i],90/252,136.66,0.75/100,imp_vol$`3M Call`[i],Ntable$V5[i],Njtable$V5[i],0,dxtable$V5[i])$gamma
+  Greek3[i,3] <- Greeks(T,threecall$Strike[i],90/252,136.66,0.75/100,imp_vol$`3M Call`[i],Ntable$V5[i],Njtable$V5[i],0,dxtable$V5[i])$theta
+  Greek3[i,4] <- vegaCall(imp_vol$`3M Call`[i],threeput$Strike[i],90/252)
+  
+  Greek3[i,5] <- Greeks(F,threeput$Strike[i],90/252,136.66,0.75/100,imp_vol$`3M Put`[i],Ntable$V6[i],Njtable$V6[i],0,dxtable$V6[i])$delta
+  Greek3[i,6] <- Greeks(F,threeput$Strike[i],90/252,136.66,0.75/100,imp_vol$`3M Put`[i],Ntable$V6[i],Njtable$V6[i],0,dxtable$V6[i])$gamma
+  Greek3[i,7] <- Greeks(F,threeput$Strike[i],90/252,136.66,0.75/100,imp_vol$`3M Put`[i],Ntable$V6[i],Njtable$V6[i],0,dxtable$V6[i])$theta
+  Greek3[i,8] <- vegaPut(imp_vol$`3M Put`[i],threeput$Strike[i],90/252)
+}
+colnames(Greek3) <- c("Delta Call","Gamma Call","Theta Call","Vega Call","Delta Put","Gamma Put","Theta Put","Vega Put")
+Greek3
+```
+
+
+```{r}
+#problem 2-d ----
+Tao <- c(rep(30,20),rep(60,20),rep(90,20))
+K <- c(onecall$Strike,oneput$Strike,twocall$Strike,twoput$Strike,threecall$Strike,threeput$Strike)
+Type <- c(rep("Call",10),rep("Put",10),rep("Call",10),rep("Put",10),rep("Call",10),rep("Put",10))
+Ask <- c(onecall$Ask,oneput$Ask,twocall$Ask,twoput$Ask,threecall$Ask,threeput$Ask)
+Bid <- c(onecall$Bid,oneput$Bid,twocall$Bid,twoput$Bid,threecall$Bid,threeput$Bid)
+Average <- c(average1call,average1put,average2call,average2put,average3call,average3put)
+SigBS <- c(imp_vol$`1M call`,imp_vol$`1M Put`,imp_vol$`2M Call`,imp_vol$`2M Put`,imp_vol$`3M Call`,imp_vol$`3M Put`)
+EFDPrice <- c(EFDP$V1,EFDP$V2,EFDP$V3,EFDP$V4,EFDP$V5,EFDP$V6)
+IFDPrice <- c(IFDP$V1,IFDP$V2,IFDP$V3,IFDP$V4,IFDP$V5,IFDP$V6)
+CNFDPrice <- c(CP$V1,CP$V2,CP$V3,CP$V4,CP$V5,CP$V6)
+
+table_All <- matrix(0,nrow = 60,ncol = 10)
+table_All[,1] <- Tao
+table_All[,2] <- K
+table_All[,3] <- Type
+table_All[,4] <- Ask
+table_All[,5] <- Bid
+table_All[,6] <- Average
+table_All[,7] <- SigBS
+table_All[,8] <- EFDPrice
+table_All[,9] <- IFDPrice
+table_All[,10] <- CNFDPrice
+colnames(table_All) <- c("Tao","K","Type","Ask","Bid","Average","SigBS","EFDPrice","IFDPrice","CNFDPrice")
+table_All
+
+write.csv(table_All,file = "data.csv")
+
+install.packages("rgl")
+library(rgl)
+plot3d(x=Tao,y=K,z=c(Ask,Bid,Average,EFDPrice,IFDPrice,CNFDPrice)
+       ,pch=19, col=c("blue","red","green","yellow","purple","black"), xlab="Maturity", 
+       ylab="Strikes",main="3D plot",zlab="Prices")
+legend3d("topright",legend=paste(c("ask","bid","mprice","EFD","IFD","CNFD")),
+         col=c("blue","red","green","yellow","purple","black",pch=19))
+
+
+```
+
+
+
+
